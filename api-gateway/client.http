@@ -1,0 +1,7 @@
+@baseUrl = http://localhost:3005
+
+### Hello World
+GET {{baseUrl}}
+
+### Health Check
+GET {{baseUrl}}/health

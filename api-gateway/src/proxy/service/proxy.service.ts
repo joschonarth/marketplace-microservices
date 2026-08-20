@@ -2,7 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
-import { serviceConfig } from 'src/config/gateway.config';
+import { serviceConfig } from '../../config/gateway.config';
 
 interface UserInfo {
   userId?: string;

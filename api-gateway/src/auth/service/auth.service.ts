@@ -2,7 +2,14 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { firstValueFrom } from 'rxjs';
-import { serviceConfig } from 'src/config/gateway.config';
+import { serviceConfig } from '../../config/gateway.config';
+
+export interface JwtPayload {
+  token: string;
+  sub: string;
+  email: string;
+  role: string;
+}
 
 export interface UserSession {
   valid: boolean;
@@ -23,9 +30,9 @@ export class AuthService {
     private readonly httpService: HttpService,
   ) {}
 
-  validateJwtToken(token: string): Promise<any> {
+  validateJwtToken(token: string): JwtPayload {
     try {
-      return this.jwtService.verify(token);
+      return this.jwtService.verify<JwtPayload>(token);
     } catch {
       throw new UnauthorizedException('Invalid JWT token');
     }

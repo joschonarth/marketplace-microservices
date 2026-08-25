@@ -1,0 +1,55 @@
+import { Injectable, Logger } from '@nestjs/common';
+
+@Injectable()
+export class CacheFallbackService {
+  private readonly logger = new Logger(CacheFallbackService.name);
+  private readonly cache = new Map<
+    string,
+    { data: unknown; timestamp: number }
+  >();
+
+  getCachedData<T>(key: string, timeout: number = 300000): Promise<T | null> {
+    const cached = this.cache.get(key);
+
+    if (!cached) {
+      return Promise.resolve(null);
+    }
+
+    const isExpired = Date.now() - cached.timestamp > timeout;
+
+    if (isExpired) {
+      this.cache.delete(key);
+      return Promise.resolve(null);
+    }
+
+    this.logger.log(`Cache HIT for key: ${key}`);
+    return Promise.resolve(cached.data as T);
+  }
+
+  setCachedData<T>(key: string, data: T): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+    });
+    this.logger.log(`Cache SET for key: ${key}`);
+  }
+
+  createCacheFallback<T>(
+    key: string,
+    defaultData: T,
+    timeout: number = 300000,
+  ): () => Promise<T> {
+    return async (): Promise<T> => {
+      const cached = await this.getCachedData<T>(key, timeout);
+
+      if (cached !== null) {
+        this.logger.log(`Using cached data for ${key}`);
+        return cached;
+      }
+
+      this.logger.warn(`No cached data available for ${key}, using default`);
+
+      return defaultData;
+    };
+  }
+}

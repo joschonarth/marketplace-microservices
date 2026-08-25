@@ -1,9 +1,10 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { AxiosResponse } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { serviceConfig } from '../../config/gateway.config';
 import { CircuitBreakerService } from '../../common/circuit-breaker/circuit-breaker.service';
+import { CacheFallbackService } from '../../common/fallback/cache.fallback';
+import { DefaultFallbackService } from '../../common/fallback/default.fallback';
 
 interface UserInfo {
   userId?: string;
@@ -18,6 +19,8 @@ export class ProxyService {
   constructor(
     private readonly httpService: HttpService,
     private readonly circuitBreakerService: CircuitBreakerService,
+    private readonly cacheFallbackService: CacheFallbackService,
+    private readonly defaultFallbackService: DefaultFallbackService,
   ) {}
 
   async proxyRequest(
@@ -27,11 +30,13 @@ export class ProxyService {
     data?: unknown,
     headers?: Record<string, string>,
     userInfo?: UserInfo,
-  ): Promise<AxiosResponse> {
+  ): Promise<unknown> {
     const service = serviceConfig[serviceName];
     const url = `${service.url}${path}`;
 
     this.logger.log(`Proxying ${method} request to ${serviceName}: ${url}`);
+
+    const fallback = this.createServiceFallback(serviceName, method, path);
 
     return this.circuitBreakerService.executeWithCircuitBreaker(
       async () => {
@@ -43,7 +48,7 @@ export class ProxyService {
         };
 
         const response = await firstValueFrom(
-          this.httpService.request({
+          this.httpService.request<unknown>({
             method: method.toLowerCase(),
             url,
             data,
@@ -52,13 +57,18 @@ export class ProxyService {
           }),
         );
 
-        return response;
+        if (method.toLowerCase() === 'get') {
+          this.cacheFallbackService.setCachedData(
+            `${serviceName}-${path}`,
+            response.data,
+          );
+        }
+
+        return response.data;
       },
       `proxy-${serviceName}`,
       { failureThreshold: 3, timeout: 30000, resetTimeout: 30000 },
-      () => {
-        throw new Error(`${serviceName} service is temporarily unavailable`);
-      },
+      fallback,
     );
   }
 
@@ -78,6 +88,50 @@ export class ProxyService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { status: 'unhealthy', error: message };
+    }
+  }
+
+  private createServiceFallback(
+    serviceName: string,
+    method: string,
+    path: string,
+  ) {
+    switch (serviceName) {
+      case 'users':
+        if (path.includes('/auth/login')) {
+          return this.defaultFallbackService.createErrorFallback(
+            'users',
+            'Authentication service unavailable',
+          );
+        }
+
+        return this.defaultFallbackService.createErrorFallback(
+          'users',
+          'User service unavailable',
+        );
+      case 'products':
+        if (method.toLowerCase() === 'get') {
+          return this.cacheFallbackService.createCacheFallback(
+            `products-${path}`,
+            { products: [], total: 0, page: 1, limit: 10 },
+          );
+        }
+
+        return this.defaultFallbackService.createErrorFallback(
+          'products',
+          'Product service unavailable',
+        );
+      case 'checkout':
+      case 'payments':
+        return this.defaultFallbackService.createErrorFallback(
+          serviceName,
+          `${serviceName} service unavailable`,
+        );
+      default:
+        return this.defaultFallbackService.createErrorFallback(
+          serviceName,
+          'Service unavailable',
+        );
     }
   }
 }

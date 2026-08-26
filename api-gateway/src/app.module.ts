@@ -13,6 +13,7 @@ import { HealthCheckModule } from './common/health/health-check.module';
 import { FallbackModule } from './common/fallback/fallback.module';
 import { HealthModule } from './health/health.module';
 import { TimeoutModule } from './common/timeout/timeout.module';
+import { RetryModule } from './common/retry/retry.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { TimeoutModule } from './common/timeout/timeout.module';
     FallbackModule,
     HealthModule,
     TimeoutModule,
+    RetryModule,
   ],
   controllers: [AppController],
   providers: [

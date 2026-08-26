@@ -12,6 +12,7 @@ import { CustomThrottlerGuard } from './guards/throttler.guard';
 import { HealthCheckModule } from './common/health/health-check.module';
 import { FallbackModule } from './common/fallback/fallback.module';
 import { HealthModule } from './health/health.module';
+import { TimeoutModule } from './common/timeout/timeout.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { HealthModule } from './health/health.module';
     HealthCheckModule,
     FallbackModule,
     HealthModule,
+    TimeoutModule,
   ],
   controllers: [AppController],
   providers: [

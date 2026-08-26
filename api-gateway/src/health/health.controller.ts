@@ -1,5 +1,5 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import type { HealthService } from './health.service';
+import { HealthService } from './health.service';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { HealthCheckService } from '../common/health/health-check.service';
 import { HealthStatus } from '../common/health/health-check.interface';

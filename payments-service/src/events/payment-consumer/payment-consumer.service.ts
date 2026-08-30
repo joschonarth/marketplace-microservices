@@ -52,7 +52,7 @@ export class PaymentConsumerService implements OnModuleInit {
 
       if (!this.validateMessage(message)) {
         this.logger.error('❌ Invalid payment message received');
-        return;
+        throw new Error('Invalid payment message received');
       }
 
       this.logger.log('✅ Payment order received and validated');

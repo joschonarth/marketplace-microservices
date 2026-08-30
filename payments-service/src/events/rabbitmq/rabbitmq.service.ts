@@ -147,11 +147,29 @@ export class RabbitmqService implements OnModuleInit, OnModuleDestroy {
         durable: true,
       });
 
+      const dlxExchange = `${exchange}.dlx`;
+      await this.channel.assertExchange(dlxExchange, 'topic', {
+        durable: true,
+      });
+
+      const dlqName = `${queueName}.dlq`;
+      await this.channel.assertQueue(dlqName, {
+        durable: true,
+        arguments: {
+          'x-message-ttl': 1000 * 60 * 60 * 24 * 7, // 7 days for analysis
+        },
+      });
+
+      const routingKeyDlq = `${routingKey}.dlq`;
+      await this.channel.bindQueue(dlqName, dlxExchange, routingKeyDlq);
+
       const queue = await this.channel.assertQueue(queueName, {
         durable: true,
         arguments: {
           'x-message-ttl': 86400000,
           'x-max-length': 10000,
+          'x-dead-letter-exchange': dlxExchange,
+          'x-dead-letter-routing-key': routingKeyDlq,
         },
       });
 
@@ -181,6 +199,7 @@ export class RabbitmqService implements OnModuleInit, OnModuleDestroy {
           } catch (error) {
             this.logger.error(`❌ Error processing message:`, error);
             channel.nack(msg, false, false);
+            this.logger.warn(`⚠️ Message sent to DLQ: ${dlqName}`);
           }
         })();
       });

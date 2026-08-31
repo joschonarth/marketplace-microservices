@@ -2,41 +2,21 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PaymentQueueService } from '../payment-queue/payment-queue.service';
 import { PaymentOrderMessage } from '../payment-queue.interface';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
-
-export interface ConsumerMetrics {
-  totalProcessed: number;
-  totalSuccess: number;
-  totalFailed: number;
-  totalRetries: number;
-  lastProcessedAt: Date | null;
-  startedAt: Date;
-  averageProcessingTime: number;
-}
+import { MetricsService } from '../metrics/metrics.service';
 
 @Injectable()
 export class PaymentConsumerService implements OnModuleInit {
-  private metrics: ConsumerMetrics = {
-    totalProcessed: 0,
-    totalSuccess: 0,
-    totalFailed: 0,
-    totalRetries: 0,
-    lastProcessedAt: null,
-    startedAt: new Date(),
-    averageProcessingTime: 0,
-  };
-
-  private totalProcessingTime = 0;
-
   private readonly logger = new Logger(PaymentConsumerService.name);
 
   constructor(
     private readonly paymentQueueService: PaymentQueueService,
     private readonly rabbitMQService: RabbitmqService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   async onModuleInit() {
     this.logger.log('🚀 Starting Payment Consumer Service');
-    this.metrics.startedAt = new Date();
+    this.metricsService.startTracking();
     await this.startConsuming();
   }
 
@@ -81,9 +61,9 @@ export class PaymentConsumerService implements OnModuleInit {
       }
 
       this.logger.log('✅ Payment order received and validated');
-      this.updateMetrics(true, startTime);
+      this.metricsService.recordSuccess(Date.now() - startTime);
     } catch (error) {
-      this.updateMetrics(false, startTime);
+      this.metricsService.recordFailure(Date.now() - startTime);
 
       this.logger.error(
         `❌ Failed to process payment for order ${message.orderId}:`,
@@ -121,71 +101,5 @@ export class PaymentConsumerService implements OnModuleInit {
     }
 
     return true;
-  }
-
-  private updateMetrics(success: boolean, startTime: number): void {
-    const processingTime = Date.now() - startTime;
-
-    this.metrics.totalProcessed++;
-    this.metrics.lastProcessedAt = new Date();
-
-    if (success) {
-      this.metrics.totalSuccess++;
-    } else {
-      this.metrics.totalFailed++;
-    }
-
-    this.totalProcessingTime += processingTime;
-    this.metrics.averageProcessingTime = Math.round(
-      this.totalProcessingTime / this.metrics.totalProcessed,
-    );
-
-    if (this.metrics.totalProcessed % 10 === 0) {
-      this.logMetricsSummary();
-    }
-  }
-
-  incrementRetryCount(): void {
-    this.metrics.totalRetries++;
-  }
-
-  private logMetricsSummary(): void {
-    const successRate =
-      this.metrics.totalProcessed > 0
-        ? (
-            (this.metrics.totalSuccess / this.metrics.totalProcessed) *
-            100
-          ).toFixed(2)
-        : '0';
-
-    this.logger.log('📊 ====== CONSUMER METRICS ======');
-    this.logger.log(`.   Total Processed: ${this.metrics.totalProcessed}`);
-    this.logger.log(`.   Success: ${this.metrics.totalSuccess}`);
-    this.logger.log(`.   Failed: ${this.metrics.totalFailed}`);
-    this.logger.log(`.   Retries: ${this.metrics.totalRetries}`);
-    this.logger.log(`.   Success Rate: ${successRate}%`);
-    this.logger.log(
-      `.   Avg Processing Time: ${this.metrics.averageProcessingTime}ms`,
-    );
-    this.logger.log('📊 ================================');
-  }
-
-  getMetrics(): ConsumerMetrics {
-    return { ...this.metrics };
-  }
-
-  resetMetrics(): void {
-    this.metrics = {
-      totalProcessed: 0,
-      totalSuccess: 0,
-      totalFailed: 0,
-      totalRetries: 0,
-      lastProcessedAt: null,
-      startedAt: new Date(),
-      averageProcessingTime: 0,
-    };
-    this.totalProcessingTime = 0;
-
-    this.logger.log('🔄 Metrics reset');
   }
 }

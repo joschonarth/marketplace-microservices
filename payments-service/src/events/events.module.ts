@@ -5,6 +5,7 @@ import { PaymentQueueService } from './payment-queue/payment-queue.service';
 import { PaymentConsumerService } from './payment-consumer/payment-consumer.service';
 import { DlqService } from './dlq/dlq.service';
 import { DlqController } from './dlq/dlq.controller';
+import { MetricsService } from './metrics/metrics.service';
 import { MetricsController } from './metrics/metrics.controller';
 
 @Module({
@@ -15,6 +16,7 @@ import { MetricsController } from './metrics/metrics.controller';
     PaymentQueueService,
     PaymentConsumerService,
     DlqService,
+    MetricsService,
   ],
   exports: [RabbitmqService, PaymentQueueService],
 })

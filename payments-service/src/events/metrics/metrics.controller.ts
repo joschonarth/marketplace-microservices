@@ -1,16 +1,11 @@
 import { Controller, Get, Logger, Post } from '@nestjs/common';
-import {
-  ConsumerMetrics,
-  PaymentConsumerService,
-} from '../payment-consumer/payment-consumer.service';
+import { ConsumerMetrics, MetricsService } from './metrics.service';
 
 @Controller('metrics')
 export class MetricsController {
   private readonly logger = new Logger(MetricsController.name);
 
-  constructor(
-    private readonly paymentConsumerService: PaymentConsumerService,
-  ) {}
+  constructor(private readonly metricsService: MetricsService) {}
 
   @Get()
   getMetrics(): ConsumerMetrics & {
@@ -18,7 +13,7 @@ export class MetricsController {
     uptime: string;
     status: string;
   } {
-    const metrics = this.paymentConsumerService.getMetrics();
+    const metrics = this.metricsService.getMetrics();
 
     const successRate =
       metrics.totalProcessed > 0
@@ -42,7 +37,7 @@ export class MetricsController {
     message: string;
     timestamp: string;
   } {
-    const metrics = this.paymentConsumerService.getMetrics();
+    const metrics = this.metricsService.getMetrics();
 
     const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
     const isProcessing =
@@ -87,7 +82,7 @@ export class MetricsController {
     rate: string;
     avgTime: string;
   } {
-    const metrics = this.paymentConsumerService.getMetrics();
+    const metrics = this.metricsService.getMetrics();
 
     return {
       processed: metrics.totalProcessed,
@@ -104,7 +99,7 @@ export class MetricsController {
 
   @Post('reset')
   resetMetrics(): { success: boolean; message: string } {
-    this.paymentConsumerService.resetMetrics();
+    this.metricsService.resetMetrics();
     this.logger.warn('⚠️ Metrics were reset by API call');
 
     return {

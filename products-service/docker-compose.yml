@@ -1,0 +1,27 @@
+services:
+  products-db:
+    image: postgres:15
+    container_name: marketplace-products-db
+    environment:
+      POSTGRES_DB: products_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - products_db_data:/var/lib/postgresql/data
+    networks:
+      - products-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  products_db_data:
+
+networks:
+  products-network:
+    driver: bridge

@@ -1,9 +1,18 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { User } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { Public } from './decorators/public.decorator';
+import { Request } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -20,5 +29,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto): Promise<{ user: User; token: string }> {
     return await this.authService.login(dto);
+  }
+
+  @Get('validate-token')
+  validateToken(@Req() req: Request) {
+    const user = req.user as { id: string; email: string; role: string };
+    return {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    };
   }
 }

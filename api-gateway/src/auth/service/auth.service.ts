@@ -59,7 +59,7 @@ export class AuthService {
     try {
       const { data } = await firstValueFrom(
         this.httpService.post<AuthResponse>(
-          `${serviceConfig.users.url}/login`,
+          `${serviceConfig.users.url}/auth/login`,
           loginDto,
           {
             timeout: serviceConfig.users.timeout,

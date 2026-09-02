@@ -1,75 +1,67 @@
-import { ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { JwtStrategy } from './jwt.strategy';
 
-describe('JwtAuthGuard', () => {
-  let guard: JwtAuthGuard;
-  let reflector: jest.Mocked<Reflector>;
+describe('JwtStrategy', () => {
+  let strategy: JwtStrategy;
 
-  beforeEach(() => {
-    reflector = {
-      getAllAndOverride: jest.fn(),
-    } as unknown as jest.Mocked<Reflector>;
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        JwtStrategy,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockReturnValue('test-jwt-secret'),
+            getOrThrow: jest.fn().mockReturnValue('test-jwt-secret'),
+          },
+        },
+      ],
+    }).compile();
 
-    guard = new JwtAuthGuard(reflector);
+    strategy = module.get<JwtStrategy>(JwtStrategy);
   });
 
-  const createMockExecutionContext = (): ExecutionContext => ({
-    getHandler: jest.fn(),
-    getClass: jest.fn(),
-    switchToHttp: jest.fn(),
-    getArgs: jest.fn(),
-    getArgByIndex: jest.fn(),
-    switchToRpc: jest.fn(),
-    switchToWs: jest.fn(),
-    getType: jest.fn(),
-  });
+  describe('validate', () => {
+    it('should return user object with id mapped from sub', () => {
+      const payload = {
+        sub: 'uuid-123',
+        email: 'test@example.com',
+        role: 'buyer',
+      };
 
-  describe('canActivate', () => {
-    it('should return true when route is marked as public', () => {
-      reflector.getAllAndOverride.mockReturnValue(true);
-      const context = createMockExecutionContext();
+      const result = strategy.validate(payload);
 
-      const result = guard.canActivate(context);
-
-      expect(result).toBe(true);
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(reflector.getAllAndOverride).toHaveBeenCalledWith('isPublic', [
-        context.getHandler(),
-        context.getClass(),
-      ]);
+      expect(result).toEqual({
+        id: 'uuid-123',
+        email: 'test@example.com',
+        role: 'buyer',
+      });
     });
 
-    it('should call super.canActivate when route is not public', () => {
-      reflector.getAllAndOverride.mockReturnValue(false);
-      const context = createMockExecutionContext();
+    it('should map sub to id correctly', () => {
+      const payload = {
+        sub: 'another-uuid-456',
+        email: 'seller@example.com',
+        role: 'seller',
+      };
 
-      const superCanActivate = jest
-        .spyOn(Object.getPrototypeOf(JwtAuthGuard.prototype), 'canActivate')
-        .mockReturnValue(true);
+      const result = strategy.validate(payload);
 
-      const result = guard.canActivate(context);
-
-      expect(result).toBe(true);
-      expect(superCanActivate).toHaveBeenCalledWith(context);
-
-      superCanActivate.mockRestore();
+      expect(result.id).toBe('another-uuid-456');
+      expect(result).not.toHaveProperty('sub');
     });
 
-    it('should call super.canActivate when isPublic metadata is undefined', () => {
-      reflector.getAllAndOverride.mockReturnValue(undefined);
-      const context = createMockExecutionContext();
+    it('should return object with exactly id, email and role properties', () => {
+      const payload = {
+        sub: 'uuid-789',
+        email: 'user@example.com',
+        role: 'buyer',
+      };
 
-      const superCanActivate = jest
-        .spyOn(Object.getPrototypeOf(JwtAuthGuard.prototype), 'canActivate')
-        .mockReturnValue(true);
+      const result = strategy.validate(payload);
 
-      const result = guard.canActivate(context);
-
-      expect(result).toBe(true);
-      expect(superCanActivate).toHaveBeenCalledWith(context);
-
-      superCanActivate.mockRestore();
+      expect(Object.keys(result)).toEqual(['id', 'email', 'role']);
     });
   });
 });

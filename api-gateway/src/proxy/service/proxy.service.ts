@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { serviceConfig } from '../../config/gateway.config';
 import { CircuitBreakerService } from '../../common/circuit-breaker/circuit-breaker.service';
@@ -62,8 +62,24 @@ export class ProxyService {
                     data,
                     headers: enhancedHeaders,
                     timeout: service.timeout,
+                    validateStatus: () => true,
                   }),
                 );
+
+                if (response.status >= 400 && response.status < 500) {
+                  const errorResponse =
+                    typeof response.data === 'object' && response.data !== null
+                      ? (response.data as Record<string, unknown>)
+                      : String(response.data);
+
+                  throw new HttpException(errorResponse, response.status);
+                }
+
+                if (response.status >= 500) {
+                  throw new Error(
+                    `Upstream ${serviceName} returned ${response.status}`,
+                  );
+                }
 
                 if (method.toLowerCase() === 'get') {
                   this.cacheFallbackService.setCachedData(

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import {
   CircuitBreakerOptions,
   CircuitBreakerState,
@@ -47,6 +47,10 @@ export class CircuitBreakerService {
 
       return result;
     } catch (error) {
+      if (error instanceof HttpException && error.getStatus() < 500) {
+        throw error;
+      }
+
       this.onFailure(circuit, key, options);
       const errorMessage =
         error instanceof Error ? error.message : String(error);

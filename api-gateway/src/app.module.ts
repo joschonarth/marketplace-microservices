@@ -15,6 +15,7 @@ import { HealthModule } from './health/health.module';
 import { TimeoutModule } from './common/timeout/timeout.module';
 import { RetryModule } from './common/retry/retry.module';
 import { ProductsModule } from './products/products.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ProductsModule } from './products/products.module';
     TimeoutModule,
     RetryModule,
     ProductsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

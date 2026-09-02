@@ -1,7 +1,22 @@
-import { AuthGuard } from './auth.guard';
+import { Test, TestingModule } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
+import { JwtAuthGuard } from './auth.guard';
 
 describe('AuthGuard', () => {
+  let guard: JwtAuthGuard;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        JwtAuthGuard,
+        { provide: Reflector, useValue: { getAllAndOverride: jest.fn() } },
+      ],
+    }).compile();
+
+    guard = module.get<JwtAuthGuard>(JwtAuthGuard);
+  });
+
   it('should be defined', () => {
-    expect(new AuthGuard()).toBeDefined();
+    expect(guard).toBeDefined();
   });
 });

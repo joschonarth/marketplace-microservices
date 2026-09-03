@@ -65,7 +65,7 @@ export class CartService {
       await this.cartItemRepository.save(newItem);
     }
 
-    return this.getActiveCartWithItems(userId);
+    return (await this.getActiveCartWithItems(userId)) as Cart;
   }
 
   async getCart(userId: string): Promise<Cart | { items: []; total: number }> {
@@ -99,18 +99,22 @@ export class CartService {
 
     await this.cartItemRepository.remove(item);
 
-    return this.getActiveCartWithItems(userId);
+    return (await this.getActiveCartWithItems(userId)) as Cart;
   }
 
   async completeCart(cartId: string): Promise<void> {
     await this.cartRepository.update(cartId, { status: CartStatus.COMPLETED });
   }
 
-  async getActiveCartWithItems(userId: string): Promise<Cart> {
-    const cart = await this.cartRepository.findOneOrFail({
+  async getActiveCartWithItems(userId: string): Promise<Cart | null> {
+    const cart = await this.cartRepository.findOne({
       where: { userId, status: CartStatus.ACTIVE },
       relations: { items: true },
     });
+
+    if (!cart) {
+      return null;
+    }
 
     const total = cart.items.reduce(
       (sum, item) => sum + Number(item.subtotal),

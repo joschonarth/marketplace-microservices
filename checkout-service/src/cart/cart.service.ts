@@ -65,7 +65,7 @@ export class CartService {
       await this.cartItemRepository.save(newItem);
     }
 
-    return this.getActiveCart(userId);
+    return this.getActiveCartWithItems(userId);
   }
 
   async getCart(userId: string): Promise<Cart | { items: []; total: number }> {
@@ -99,10 +99,14 @@ export class CartService {
 
     await this.cartItemRepository.remove(item);
 
-    return this.getActiveCart(userId);
+    return this.getActiveCartWithItems(userId);
   }
 
-  private async getActiveCart(userId: string): Promise<Cart> {
+  async completeCart(cartId: string): Promise<void> {
+    await this.cartRepository.update(cartId, { status: CartStatus.COMPLETED });
+  }
+
+  async getActiveCartWithItems(userId: string): Promise<Cart> {
     const cart = await this.cartRepository.findOneOrFail({
       where: { userId, status: CartStatus.ACTIVE },
       relations: { items: true },

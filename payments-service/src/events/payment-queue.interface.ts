@@ -8,7 +8,6 @@ export interface PaymentOrderMessage {
     price: number;
   }>;
   paymentMethod: string;
-  description?: string;
   createdAt?: Date;
   metadata?: {
     service: string;

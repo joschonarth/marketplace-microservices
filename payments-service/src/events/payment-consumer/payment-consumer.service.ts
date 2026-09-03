@@ -3,6 +3,7 @@ import { PaymentQueueService } from '../payment-queue/payment-queue.service';
 import { PaymentOrderMessage } from '../payment-queue.interface';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { PaymentsService } from 'src/payments/payments.service';
 
 @Injectable()
 export class PaymentConsumerService implements OnModuleInit {
@@ -12,6 +13,7 @@ export class PaymentConsumerService implements OnModuleInit {
     private readonly paymentQueueService: PaymentQueueService,
     private readonly rabbitMQService: RabbitmqService,
     private readonly metricsService: MetricsService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async onModuleInit() {
@@ -44,23 +46,20 @@ export class PaymentConsumerService implements OnModuleInit {
     }
   }
 
-  private processPaymentOrder(message: PaymentOrderMessage): void {
+  private async processPaymentOrder(
+    message: PaymentOrderMessage,
+  ): Promise<void> {
     const startTime = Date.now();
 
     try {
-      this.logger.log(
-        `📝 Processing payment order: ` +
-          `orderId=${message.orderId}, ` +
-          `userId=${message.userId}, ` +
-          `amount=${message.amount}`,
-      );
-
       if (!this.validateMessage(message)) {
         this.logger.error('❌ Invalid payment message received');
         throw new Error('Invalid payment message received');
       }
 
-      this.logger.log('✅ Payment order received and validated');
+      await this.paymentsService.processPayment(message);
+
+      this.logger.log('✅ Payment order processed successfully');
       this.metricsService.recordSuccess(Date.now() - startTime);
     } catch (error) {
       this.metricsService.recordFailure(Date.now() - startTime);

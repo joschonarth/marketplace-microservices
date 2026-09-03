@@ -7,9 +7,10 @@ import { DlqService } from './dlq/dlq.service';
 import { DlqController } from './dlq/dlq.controller';
 import { MetricsService } from './metrics/metrics.service';
 import { MetricsController } from './metrics/metrics.controller';
+import { PaymentsModule } from 'src/payments/payments.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, PaymentsModule],
   controllers: [DlqController, MetricsController],
   providers: [
     RabbitmqService,

@@ -16,6 +16,7 @@ import { TimeoutModule } from './common/timeout/timeout.module';
 import { RetryModule } from './common/retry/retry.module';
 import { ProductsModule } from './products/products.module';
 import { UsersModule } from './users/users.module';
+import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { UsersModule } from './users/users.module';
     RetryModule,
     ProductsModule,
     UsersModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [

@@ -8,6 +8,7 @@ import { DlqController } from './dlq/dlq.controller';
 import { MetricsService } from './metrics/metrics.service';
 import { MetricsController } from './metrics/metrics.controller';
 import { PaymentsModule } from 'src/payments/payments.module';
+import { PaymentResultPublisherService } from './payment-result/payment-result-publisher.service';
 
 @Module({
   imports: [ConfigModule, PaymentsModule],
@@ -18,6 +19,7 @@ import { PaymentsModule } from 'src/payments/payments.module';
     PaymentConsumerService,
     DlqService,
     MetricsService,
+    PaymentResultPublisherService,
   ],
   exports: [RabbitmqService, PaymentQueueService],
 })

@@ -4,6 +4,7 @@ import { PaymentOrderMessage } from '../payment-queue.interface';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { PaymentsService } from 'src/payments/payments.service';
+import { PaymentResultPublisherService } from '../payment-result/payment-result-publisher.service';
 
 @Injectable()
 export class PaymentConsumerService implements OnModuleInit {
@@ -14,6 +15,7 @@ export class PaymentConsumerService implements OnModuleInit {
     private readonly rabbitMQService: RabbitmqService,
     private readonly metricsService: MetricsService,
     private readonly paymentsService: PaymentsService,
+    private readonly paymentResultPublisher: PaymentResultPublisherService,
   ) {}
 
   async onModuleInit() {
@@ -57,7 +59,16 @@ export class PaymentConsumerService implements OnModuleInit {
         throw new Error('Invalid payment message received');
       }
 
-      await this.paymentsService.processPayment(message);
+      const payment = await this.paymentsService.processPayment(message);
+
+      try {
+        await this.paymentResultPublisher.publishPaymentResult(payment);
+      } catch (publishError) {
+        this.logger.error(
+          `⚠️ Failed to publish payment result for orderId=${message.orderId}, payment is saved and can be queried via REST`,
+          publishError,
+        );
+      }
 
       this.logger.log('✅ Payment order processed successfully');
       this.metricsService.recordSuccess(Date.now() - startTime);

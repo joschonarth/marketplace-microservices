@@ -48,15 +48,16 @@ Porém, o `OrdersModule` registra apenas a entidade `Order` — não possui cont
 - Atualização do `OrdersModule` para importar `CartModule` e `EventsModule`, e registrar controller e service
 - Atualização do `CartModule` para exportar o `CartService`
 - Atualização do `CartService` para expor funcionalidades necessárias ao checkout
+- Consumer assíncrono (`PaymentResultConsumerService`) que recebe o resultado do pagamento via RabbitMQ e atualiza o status do pedido (`Order`)
+- Método `updateOrderStatus` no `OrdersService` para atualização de status por mensagens do sistema
 
 ### Fora do escopo
 
 - Processamento de pagamento — é responsabilidade exclusiva do `payments-service`
 - Cancelamento de pedido
 - Verificação de estoque
-- Atualização de status do pedido via callback do `payments-service` (será spec futura)
 - Alterações nas entidades `Cart`, `CartItem` ou `Order` existentes
-- Alterações no `EventsModule` (RabbitMQ) ou no `PaymentQueueService`
+- Alterações no `PaymentQueueService` de publicação existente
 - Alterações no `products-service`, `payments-service` ou qualquer outro serviço
 - Criação de testes unitários ou e2e (podem ser adicionados em spec futura)
 
@@ -192,9 +193,10 @@ O `OrdersModule` deve:
 
 - Importar `TypeOrmModule.forFeature([Order])` (já existe)
 - Importar `CartModule` para acessar o `CartService`
-- Importar `EventsModule` para acessar o `PaymentQueueService`
+- Importar `EventsModule` para acessar o `PaymentQueueService` e `RabbitmqService`
 - Declarar `OrdersController` como controller
 - Declarar `OrdersService` como provider
+- Declarar `PaymentResultConsumerService` como provider
 
 ### 6.2 Atualização do CartModule
 
@@ -209,7 +211,73 @@ O endpoint `POST /cart/checkout` deve pertencer ao `CartController` (prefixo `ca
 
 ---
 
-## 7. Estrutura de Arquivos (Pós-implementação)
+## 7. Consumer Assíncrono — Payment Result
+
+Após o `payments-service` processar um pagamento, ele publica o resultado na exchange `payments` com routing key `payment.result` (conforme definido na spec `payments-service/docs/specs/01-processamento-de-pagamento.md`). O `checkout-service` deve consumir essa mensagem e atualizar o status do pedido.
+
+### 7.1 PaymentResultMessage (Interface)
+
+Criar a interface `PaymentResultMessage` no `checkout-service` (espelhando o contrato definido na spec do payments-service):
+
+| Campo             | Tipo                         | Descrição                             |
+| ----------------- | ---------------------------- | ------------------------------------- |
+| `orderId`         | string (UUID)                | ID do pedido no checkout-service      |
+| `status`          | `'approved'` \| `'rejected'` | Resultado do processamento            |
+| `transactionId`   | string                       | ID da transação gerado pelo gateway   |
+| `rejectionReason` | string \| null               | Motivo da rejeição (null se aprovado) |
+| `processedAt`     | string (ISO 8601)            | Timestamp do processamento            |
+
+### 7.2 PaymentResultConsumerService
+
+Criar um service dentro do módulo `OrdersModule` que consome a fila de resultados de pagamento.
+
+**Localização:** `src/orders/payment-result-consumer/payment-result-consumer.service.ts`
+
+**Justificativa de estar no `OrdersModule`:**
+
+- O `OrdersModule` já importa o `EventsModule` (tem acesso ao `RabbitmqService`)
+- O consumer modifica entidades do domínio de orders
+- Evita dependência circular entre módulos
+
+**Topologia RabbitMQ:**
+
+| Componente  | Valor                  | Descrição                               |
+| ----------- | ---------------------- | --------------------------------------- |
+| Exchange    | `payments`             | Reutiliza a exchange topic existente    |
+| Routing Key | `payment.result`       | Routing key dos resultados de pagamento |
+| Queue       | `payment_result_queue` | Fila consumida por este service         |
+
+**Fluxo:**
+
+1. Na inicialização do módulo (`OnModuleInit`), registrar o consumer na fila `payment_result_queue` via `RabbitmqService.subscribeToQueue()`
+2. Ao receber uma mensagem `PaymentResultMessage`:
+   - Validar campos obrigatórios (`orderId`, `status`)
+   - Chamar `OrdersService.updateOrderStatus()` com o mapeamento:
+     - `approved` → `OrderStatus.PAID`
+     - `rejected` → `OrderStatus.FAILED`
+   - Logar a atualização com orderId, status anterior e novo status
+3. Se o `Order` não for encontrado, logar um warning e fazer ACK na mensagem (não faz sentido retry se o pedido não existe)
+4. Se ocorrer um erro de banco, lançar exceção para acionar o mecanismo de retry/DLQ do `RabbitmqService`
+
+### 7.3 Método updateOrderStatus no OrdersService
+
+Adicionar ao `OrdersService`:
+
+**Entrada:** `orderId` (string UUID), `status` (OrderStatus)
+
+**Fluxo:**
+
+1. Buscar o `Order` pelo `id` (sem filtro por `userId`, pois a mensagem vem do sistema)
+2. Se não encontrado, lançar `NotFoundException`
+3. Atualizar o `status` do pedido
+4. Salvar no banco
+5. Retornar o pedido atualizado
+
+**Nota:** este método é diferente dos métodos `findAll` e `findOne` que filtram por `userId`. O `updateOrderStatus` é invocado por um processo interno (consumer), não por uma requisição HTTP de um usuário.
+
+---
+
+## 8. Estrutura de Arquivos (Pós-implementação)
 
 ```
 src/
@@ -229,19 +297,26 @@ src/
 ├── orders/
 │   ├── orders.module.ts                       (modificado — imports, controller, providers)
 │   ├── orders.controller.ts                   (NOVO)
-│   └── orders.service.ts                      (NOVO)
-├── events/                                    (inalterado)
+│   ├── orders.service.ts                      (NOVO — inclui updateOrderStatus)
+│   └── payment-result-consumer/
+│       └── payment-result-consumer.service.ts (NOVO)
+├── events/
+│   ├── events.module.ts                       (inalterado)
+│   ├── payment-queue.interface.ts             (inalterado)
+│   ├── payment-result.interface.ts            (NOVO — PaymentResultMessage)
+│   ├── payment-queue/                         (inalterado)
+│   └── rabbitmq/                              (inalterado)
 ├── auth/                                      (inalterado)
 ├── config/                                    (inalterado)
 ├── health/                                    (inalterado)
 └── products-client/                           (inalterado)
 ```
 
-**Total:** 3 arquivos novos · 3 arquivos modificados · 0 arquivos removidos
+**Total:** 5 arquivos novos · 3 arquivos modificados · 0 arquivos removidos
 
 ---
 
-## 8. Dependências
+## 9. Dependências
 
 | Pacote              | Status no `package.json` | Ação necessária |
 | ------------------- | ------------------------ | --------------- |
@@ -254,7 +329,7 @@ src/
 
 ---
 
-## 9. Critérios de Aceite
+## 10. Critérios de Aceite
 
 ### CA-1: Finalização do carrinho (POST /cart/checkout)
 
@@ -303,16 +378,31 @@ src/
 ### CA-6: Nenhum efeito colateral
 
 - [ ] As entidades `Cart`, `CartItem` e `Order` permanecem inalteradas
-- [ ] O `EventsModule`, `PaymentQueueService` e `RabbitmqService` permanecem inalterados
+- [ ] O `PaymentQueueService` de publicação permanece inalterado
 - [ ] A interface `PaymentOrderMessage` permanece inalterada
 - [ ] O `AuthModule` permanece inalterado
 - [ ] Nenhum arquivo de outro serviço foi alterado
 - [ ] Os endpoints existentes do carrinho (`POST /cart/items`, `GET /cart`, `DELETE /cart/items/:itemId`) continuam funcionando normalmente
 - [ ] O endpoint de health (`GET /health`) continua funcionando
 
+### CA-7: Consumer de resultado do pagamento
+
+- [ ] O `PaymentResultConsumerService` inicia automaticamente com o módulo (`OnModuleInit`)
+- [ ] Ao receber mensagem com status `approved`, o `Order` é atualizado para `OrderStatus.PAID`
+- [ ] Ao receber mensagem com status `rejected`, o `Order` é atualizado para `OrderStatus.FAILED`
+- [ ] Se o `orderId` da mensagem não corresponder a nenhum pedido, a mensagem é logada como warning e recebe ACK (sem retry)
+- [ ] Se ocorrer erro de banco durante a atualização, a exceção é lançada para acionar retry/DLQ do `RabbitmqService`
+- [ ] Mensagens duplicadas (mesmo resultado processado novamente) não causam efeitos colaterais — atualizar para o mesmo status é idempotente
+
+### CA-8: Consistência de dados entre serviços
+
+- [ ] Após o fluxo completo (checkout → pagamento → notificação), o status do `Order` consultado via `GET /orders/:id` reflete o resultado do pagamento
+- [ ] Pagamento aprovado (amount inteiro) resulta em `Order.status = "paid"`
+- [ ] Pagamento rejeitado (amount terminado em .99) resulta em `Order.status = "failed"`
+
 ---
 
-## 10. Riscos e Mitigações
+## 11. Riscos e Mitigações
 
 | Risco                                                            | Impacto                                                               | Mitigação                                                                                                                                                                                                                                   |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -320,13 +410,18 @@ src/
 | Falha entre criação da Order e atualização do status do carrinho | Inconsistência: Order criada mas carrinho ainda `active`              | Realizar as operações de persistência (Order + status do carrinho) na mesma transação quando possível, ou garantir a ordem correta das operações                                                                                            |
 | Usuário envia múltiplas requisições simultâneas de checkout      | Possibilidade de criar múltiplas Orders para o mesmo carrinho         | Após criar a Order, o status do carrinho muda para `completed`. A validação inicial verifica carrinho `active`, reduzindo a janela de race condition. Para robustez adicional, considerar lock otimista ou constraint UNIQUE em spec futura |
 | Valores decimais com arredondamento incorreto                    | Divergência entre `amount` da Order e `total` do carrinho             | Utilizar o `total` já calculado e persistido no carrinho, que respeita a precisão decimal (10,2) do banco                                                                                                                                   |
+| Mensagem de resultado chega antes do commit do pedido            | Consumer não encontra o Order e faz ACK sem atualizar                 | A publicação no `payments-service` ocorre após processamento (500ms–2000ms de latência simulada), dando tempo para o commit. Em cenário improvável, o status pode ser consultado via `GET /payments/:orderId` como fallback                 |
+| Mensagem de resultado entregue mais de uma vez                   | Status poderia ser atualizado de forma inesperada                     | O consumer é idempotente — atualizar para `PAID` ou `FAILED` novamente é seguro e sem efeitos colaterais                                                                                                                                    |
 
 ---
 
-## 11. Observações
+## 12. Observações
 
 - Esta spec **NÃO** inclui processamento de pagamento — isso é responsabilidade exclusiva do `payments-service`.
 - Esta spec **NÃO** inclui cancelamento de pedido ou verificação de estoque.
-- O status da Order permanecerá `pending` até que o `payments-service` processe o pagamento e comunique o resultado (mecanismo a ser definido em spec futura).
+- O status da Order começa como `pending` e é atualizado assincronamente pelo `PaymentResultConsumerService` quando o `payments-service` publica o resultado via RabbitMQ.
+- O contrato da mensagem `PaymentResultMessage` (interface, exchange, routing key) está definido na spec `payments-service/docs/specs/01-processamento-de-pagamento.md` (seção 7).
+- O `OrderStatus` enum já possui os valores `PAID` e `FAILED` necessários para o mapeamento. Nenhuma alteração no enum é necessária.
+- O `RabbitmqService` do checkout-service já possui o método `subscribeToQueue` com suporte a retry/DLQ. O consumer de resultado pode reutilizá-lo diretamente.
 - O `CartService` atualmente possui o método `getActiveCart` como `private`. Será necessário expor funcionalidades equivalentes (busca de carrinho ativo com itens e atualização de status) como métodos públicos para uso pelo `OrdersService`.
 - O `ValidationPipe` global já está ativo no `main.ts` com `whitelist: true`, `forbidNonWhitelisted: true` e `transform: true`.

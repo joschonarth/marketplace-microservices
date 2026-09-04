@@ -75,4 +75,20 @@ export class OrdersService {
 
     return order;
   }
+
+  async updateOrderStatus(
+    orderId: string,
+    status: OrderStatus,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pedido não encontrado');
+    }
+
+    order.status = status;
+    return this.orderRepository.save(order);
+  }
 }

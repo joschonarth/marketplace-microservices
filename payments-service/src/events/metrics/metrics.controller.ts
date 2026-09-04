@@ -1,7 +1,7 @@
 import { Controller, Get, Logger, Post } from '@nestjs/common';
 import { ConsumerMetrics, MetricsService } from './metrics.service';
 
-@Controller('metrics')
+@Controller('consumer-metrics')
 export class MetricsController {
   private readonly logger = new Logger(MetricsController.name);
 

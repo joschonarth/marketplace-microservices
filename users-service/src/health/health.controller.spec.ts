@@ -1,4 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
+
+jest.mock('@nestjs/terminus', () => ({
+  HealthCheck:
+    () =>
+    (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) =>
+      descriptor,
+  HealthCheckService: class HealthCheckService {},
+  TypeOrmHealthIndicator: class TypeOrmHealthIndicator {
+    pingCheck = jest.fn();
+  },
+}));
+
 import { HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus';
 import { HealthController } from './health.controller';
 

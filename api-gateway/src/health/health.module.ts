@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { HealthController } from './health.controller';
-import { HealthService } from './health.service';
-import { HealthCheckModule } from '../common/health/health-check.module';
+import { TerminusModule } from '@nestjs/terminus';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
-  imports: [HealthCheckModule],
+  imports: [TerminusModule, HttpModule],
   controllers: [HealthController],
-  providers: [HealthService],
 })
 export class HealthModule {}

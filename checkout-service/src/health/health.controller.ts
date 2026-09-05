@@ -1,11 +1,27 @@
 import { Controller, Get } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
+import {
+  HealthCheck,
+  HealthCheckService,
+  TypeOrmHealthIndicator,
+} from '@nestjs/terminus';
+import { RabbitMQHealthIndicator } from './rabbitmq.health-indicator';
 
-@Controller()
+@Controller('health')
 export class HealthController {
+  constructor(
+    private health: HealthCheckService,
+    private db: TypeOrmHealthIndicator,
+    private rabbitmq: RabbitMQHealthIndicator,
+  ) {}
+
   @Public()
-  @Get('health')
-  getHealth() {
-    return { status: 'ok', service: 'checkout-service' };
+  @Get()
+  @HealthCheck()
+  check() {
+    return this.health.check([
+      () => this.db.pingCheck('database'),
+      () => this.rabbitmq.isHealthy('rabbitmq'),
+    ]);
   }
 }

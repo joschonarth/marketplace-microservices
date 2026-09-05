@@ -7,6 +7,7 @@ import { databaseConfig } from './config/database.config';
 import { ProductsModule } from './products/products.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { HealthController } from './health/health.controller';
     TypeOrmModule.forRoot(databaseConfig),
     AuthModule,
     ProductsModule,
+    MetricsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

@@ -214,14 +214,104 @@
     },
     {
       "type": "row",
-      "title": "Throughput & Errors",
+      "title": "Active Alerts",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "collapsed": false
+    },
+    {
+      "type": "table",
+      "title": "Alertas Ativos",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "targets": [
+        {
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": false
+            },
+            "renameByName": {
+              "alertname": "Alerta",
+              "alertstate": "Estado",
+              "severity": "Severidade",
+              "job": "Serviço",
+              "instance": "Instância",
+              "Value": "Valor"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Severidade" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": { "text": "CRITICAL", "color": "red" }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "warning": { "text": "WARNING", "color": "orange" }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": { "info": { "text": "INFO", "color": "blue" } }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Throughput & Errors",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 12 },
       "collapsed": false
     },
     {
       "type": "timeseries",
       "title": "Throughput por Serviço",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -247,7 +337,7 @@
     {
       "type": "timeseries",
       "title": "Taxa de Erros por Serviço",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -282,13 +372,13 @@
     {
       "type": "row",
       "title": "Latency & Resources",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
       "collapsed": false
     },
     {
       "type": "timeseries",
       "title": "Latência P95 por Serviço",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -314,7 +404,7 @@
     {
       "type": "timeseries",
       "title": "Uso de Memória por Serviço (RSS)",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -360,13 +450,13 @@
     {
       "type": "row",
       "title": "Business Metrics",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
       "collapsed": false
     },
     {
       "type": "stat",
       "title": "Total Pedidos",
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 24 },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 31 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -393,7 +483,7 @@
     {
       "type": "stat",
       "title": "Pagamentos Aprovados",
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 24 },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 31 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -420,7 +510,7 @@
     {
       "type": "stat",
       "title": "Pagamentos Rejeitados",
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 24 },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 31 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -447,7 +537,7 @@
     {
       "type": "gauge",
       "title": "Taxa de Aprovação (%)",
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 24 },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 31 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -479,13 +569,13 @@
     {
       "type": "row",
       "title": "Business Trends",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
       "collapsed": false
     },
     {
       "type": "timeseries",
       "title": "Pedidos e Pagamentos ao Longo do Tempo",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {
@@ -521,7 +611,7 @@
     {
       "type": "timeseries",
       "title": "Rejeições por Motivo",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
       "targets": [
         {

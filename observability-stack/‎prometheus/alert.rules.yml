@@ -1,0 +1,77 @@
+groups:
+  - name: marketplace-infrastructure
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Serviço {{ $labels.job }} está fora do ar"
+          description: "O serviço {{ $labels.job }} ({{ $labels.instance }}) está DOWN há mais de 30 segundos."
+
+      - alert: HighErrorRate
+        expr: >
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job)
+            /
+            sum(rate(http_requests_total[5m])) by (job)
+          ) * 100 > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taxa de erro alta no {{ $labels.job }}"
+          description: 'O serviço {{ $labels.job }} tem {{ printf "%.1f" $value }}% de respostas 5xx nos últimos 5 minutos (threshold: 10%).'
+
+      - alert: HighLatencyP95
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job)
+          ) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latência P95 alta no {{ $labels.job }}"
+          description: 'O serviço {{ $labels.job }} tem P95 de {{ printf "%.2f" $value }}s nos últimos 5 minutos (threshold: 2s).'
+
+      - alert: HighMemoryUsage
+        expr: >
+          users_service_process_resident_memory_bytes > 536870912
+          or products_service_process_resident_memory_bytes > 536870912
+          or checkout_service_process_resident_memory_bytes > 536870912
+          or payments_service_process_resident_memory_bytes > 536870912
+          or api_gateway_process_resident_memory_bytes > 536870912
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso de memória alto"
+          description: 'Um serviço está usando mais de 512MB de RSS há mais de 2 minutos (atual: {{ printf "%.0f" $value }} bytes).'
+
+  - name: marketplace-business
+    rules:
+      - alert: NoPaymentsProcessed
+        expr: >
+          sum(increase(payments_processed_total{job="payments-service"}[5m])) == 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Nenhum pagamento processado nos últimos 5 minutos"
+          description: "O payments-service não processou nenhum pagamento nos últimos 5 minutos. Verificar se o fluxo de checkout e a fila RabbitMQ estão funcionando."
+
+      - alert: HighPaymentRejectionRate
+        expr: >
+          (
+            sum(rate(payments_rejected_total{job="payments-service"}[5m]))
+            /
+            sum(rate(payments_processed_total{job="payments-service"}[5m]))
+          ) * 100 > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taxa de rejeição de pagamentos alta"
+          description: '{{ printf "%.1f" $value }}% dos pagamentos estão sendo rejeitados nos últimos 5 minutos (threshold: 50%). Verificar o gateway de pagamento.'

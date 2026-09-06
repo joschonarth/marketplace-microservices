@@ -1,9 +1,16 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  }
+    "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/tsconfig.json" }]
+  },
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/src/$1",
+    "^@nestjs/terminus$": "<rootDir>/test/mocks/terminus.ts"
+  },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(?:@nestjs/config|@nestjs/core|@nestjs/common|@nestjs/testing|@nestjs/jwt|@nestjs/passport|@nestjs/typeorm|@nestjs/terminus|passport-jwt|jsonwebtoken)/)"
+  ]
 }

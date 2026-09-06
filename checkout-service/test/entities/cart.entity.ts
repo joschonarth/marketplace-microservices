@@ -1,0 +1,37 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { CartStatus } from '../../src/cart/enums/cart-status.enum';
+import { CartItem } from './cart-item.entity';
+
+@Entity()
+export class Cart {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column({ type: 'uuid' })
+  userId!: string;
+
+  @Column({ type: 'simple-enum', enum: CartStatus, default: CartStatus.ACTIVE })
+  status!: CartStatus;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  total!: number;
+
+  @OneToMany(() => CartItem, (item) => item.cart, {
+    cascade: true,
+    eager: true,
+  })
+  items!: CartItem[];
+
+  @CreateDateColumn()
+  createdAt!: Date;
+
+  @UpdateDateColumn()
+  updatedAt!: Date;
+}

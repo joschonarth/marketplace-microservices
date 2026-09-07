@@ -32,6 +32,7 @@
     "amqplib": "^2.0.1",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "passport": "^0.7.0",
@@ -82,8 +83,16 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/../tsconfig.json"
+        }
+      ]
     },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(?:@nestjs/config|@nestjs/core|@nestjs/common|@nestjs/testing|@nestjs/jwt|@nestjs/passport|@nestjs/typeorm|@nestjs/terminus|passport-jwt|jsonwebtoken)/)"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

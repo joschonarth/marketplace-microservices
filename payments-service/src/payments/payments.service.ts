@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Payment, PaymentStatus } from './payment.entity';
 import { FakePaymentGatewayService } from './fake-payment-gateway.service';
 import { PaymentOrderMessage } from '../events/payment-queue.interface';
-import { MetricsService } from 'src/metrics/metrics.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 @Injectable()
 export class PaymentsService {

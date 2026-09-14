@@ -1,98 +1,221 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<div align="center">
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# 🛒 Checkout Service
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+_A NestJS checkout, cart, and order orchestration service for the marketplace, powered by PostgreSQL, RabbitMQ, and TypeORM._
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+📃 [About](#-about)&nbsp;&nbsp;•&nbsp;&nbsp;
+🏗️ [Role in the Architecture](#️-role-in-the-architecture)&nbsp;&nbsp;•&nbsp;&nbsp;
+🧠 [Architecture Concepts](#-architecture-concepts)&nbsp;&nbsp;•&nbsp;&nbsp;
+🛠️ [Technologies](#️-technologies)&nbsp;&nbsp;•&nbsp;&nbsp;
+💾 [Database Diagram](#-database-diagram)&nbsp;&nbsp;•&nbsp;&nbsp;
+🚀 [Getting Started](#-getting-started)&nbsp;&nbsp;•&nbsp;&nbsp;
+📖 [API Documentation](#-api-documentation)&nbsp;&nbsp;•&nbsp;&nbsp;
+🧪 [Testing](#-testing)
 
-## Project setup
+</div>
 
-```bash
-$ npm install
+---
+
+## 📃 About
+
+The checkout service implements the cart, checkout, and order domain for the marketplace. It owns the active cart lifecycle, cart items, order creation, and payment-order publishing flow behind the API Gateway.
+
+The service combines HTTP controllers with event-driven integration to the payments domain. It receives the authenticated caller context from the gateway, creates an order in the order table, and pushes a payment request message to RabbitMQ for downstream payment processing.
+
+## 🏗️ Role in the Architecture
+
+The checkout service receives traffic from the API Gateway through the cart and orders proxy routes. The gateway routes product and checkout business operations into this service in a single synchronous HTTP entrypoint while using the checkout service as the coordinator for order state and payment orchestration.
+
+The concrete observable HTTP routes implemented here are:
+
+- `POST /cart/items` to add a product to the user’s cart.
+- `GET /cart` to read the current active cart.
+- `DELETE /cart/items/:itemId` to remove a cart line.
+- `POST /cart/checkout` to create an order from the active cart.
+- `GET /orders` to list orders for the authenticated user.
+- `GET /orders/:id` to query a single order by ID.
+
+Internally, the checkout service also publishes payment messages through RabbitMQ with an exchange and routing key such as `payments` and `payment.order`, and consumes `payment.result` messages to update the order status using the payment result consumer.
+
+## 🧠 Architecture Concepts
+
+The checkout service has the following verifiable patterns:
+
+- **Database per Service** — the checkout service owns its own TypeORM/PostgreSQL mapping for the `Cart`, `CartItem`, and `Order` entities.
+- **API Gateway Pattern** — the API Gateway proxies traffic and exposes the cart and order endpoints as a single public entry point.
+- **Event-Driven Architecture** — the service publishes payment-order messages to RabbitMQ and consumes payment-result messages to update order status.
+- **Publish/Subscribe Messaging** — the service uses `RabbitmqService` with a configured exchange in the `payments` domain and publishes messages with a routing key `payment.order`.
+- **Request-Reply and Queue Integration** — the payment result consumer subscribes to the queue `payment_result_queue` using the `payments` exchange and `payment.result` routing key.
+- **JWT Authentication** — `AuthModule` and the JWT guard establish per-request identity for cart and order flows.
+- **Health Checks** — the health controller checks both the database and RabbitMQ channel through a custom health indicator.
+- **Observability Middleware** — the metrics service captures HTTP request counters, durations, order creation counters, and RabbitMQ publish counters.
+
+## 🛠️ Technologies
+
+- ⚙️ **[NestJS](https://nestjs.com/)** — framework for controllers, services, modules, and event integration.
+- 🟦 **[TypeScript](https://www.typescriptlang.org/)** — primary implementation language.
+- 🌐 **[Express](https://expressjs.com/)** — HTTP server platform used by the service.
+- 📡 **[@nestjs/axios](https://docs.nestjs.com/techniques/http-module)** — HTTP client support available in the service dependency set.
+- 🔐 **[@nestjs/jwt](https://github.com/nestjs/jwt)** — JWT support and authentication semantics.
+- 🛡️ **[@nestjs/passport](https://github.com/nestjs/passport)** — Passport wiring for JWT validation.
+- 📘 **[@nestjs/swagger](https://docs.nestjs.com/openapi/introduction)** — OpenAPI and Swagger documentation generation.
+- 🩺 **[@nestjs/terminus](https://docs.nestjs.com/recipes/terminus)** — health checks and database/RabbitMQ indicators.
+- 🗄️ **[@nestjs/typeorm](https://docs.nestjs.com/techniques/database)** — TypeORM integration for repository-backed entities.
+- 🐘 **[PostgreSQL](https://www.postgresql.org/)** — relational database engine used by the checkout service.
+- 🐇 **[RabbitMQ](https://www.rabbitmq.com/)** — message broker used for payment-order publication and payment-result subscription.
+- 🧾 **[TypeORM](https://typeorm.io/)** — ORM for `Cart`, `CartItem`, and `Order` entities.
+- 🧪 **[Jest](https://jestjs.io/)** — automated test runner used by the service.
+- 🧾 **[class-transformer](https://github.com/typestack/class-transformer)** — DTO transformation and serialization support.
+- ✅ **[class-validator](https://github.com/typestack/class-validator)** — validation of request DTOs.
+- 📊 **[prom-client](https://github.com/siimon/prom-client)** — metrics registry, counters, and histogram output.
+- 🐰 **[amqplib](https://www.npmjs.com/package/amqplib)** — RabbitMQ client library for message publish/consume support.
+- 📡 **[axios](https://axios-http.com/)** — HTTP client support used by the checkout service dependencies.
+
+## 💾 Database Diagram
+
+```mermaid
+erDiagram
+  CART {
+    uuid id PK
+    uuid userId
+    enum status
+    decimal total
+    timestamp createdAt
+    timestamp updatedAt
+  }
+
+  CART_ITEM {
+    uuid id PK
+    uuid cartId FK
+    uuid productId
+    varchar productName
+    decimal price
+    int quantity
+    decimal subtotal
+    timestamp createdAt
+  }
+
+  ORDER {
+    uuid id PK
+    uuid userId
+    uuid cartId
+    decimal amount
+    enum status
+    varchar paymentMethod
+    timestamp createdAt
+    timestamp updatedAt
+  }
+
+  CART ||--o{ CART_ITEM : contains
 ```
 
-## Compile and run the project
+The service owns the cart and order records as persistent state. Cart items are attached to a cart via `cartId`, and the order is created from the cart snapshot during checkout.
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 22+ recommended
+- [npm](https://www.npmjs.com/) or [pnpm](https://pnpm.io/)
+- PostgreSQL and RabbitMQ accessible through the configured environment values
+
+### Installation
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/joschonarth/marketplace-ms.git
+   ```
+
+2. Enter the service directory:
+
+   ```bash
+   cd marketplace-ms/checkout-service
+   ```
+
+3. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+### Environment Variables
+
+The service configuration file binds both the database and messaging endpoints. Copy the example file before running locally:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env
 ```
 
-## Run tests
+The example file declares:
+
+```env
+PORT=3003
+NODE_ENV=development
+DB_HOST=localhost
+DB_PORT=5434
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_DATABASE=checkout_db
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=24h
+USERS_SERVICE_URL=http://localhost:3000
+PRODUCTS_SERVICE_URL=http://localhost:3001
+PAYMENTS_SERVICE_URL=http://localhost:3004
+RABBITMQ_URL=amqp://admin:admin@localhost:5672
+RABBITMQ_QUEUE_PAYMENTS=payment_queue
+RABBITMQ_EXCHANGE=payments
+```
+
+### Database and Messaging
+
+The service connects to PostgreSQL via `TypeOrmModule.forRoot(databaseConfig)` and attempts to establish a RabbitMQ channel in the `RabbitmqService` during module initialization.
+
+### Run the service
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run start:dev
 ```
 
-## Deployment
+The service defaults to port `3003` when the environment variable `PORT` is not provided.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## 📖 API Documentation
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Swagger UI is installed in the service bootstrap file and exposes the checkout, cart, and order routes through the generated OpenAPI document. After the service is running, the user-facing docs are at:
+
+```text
+http://localhost:3003/api
+```
+
+The Swagger document uses a JWT bearer auth scheme, so protected routes should be exercised with the token in the `Authorize` panel.
+
+## 🧪 Testing
+
+The checkout service contains controller and service specs, as well as an e2e suite. The test command declared in the package manifest is:
 
 ```bash
-$ npm install -g mau
-$ mau deploy
+npm test
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+This service also provides a Jest e2e configuration in `test/jest-e2e.json` and verifies domain entities in the checkout service test folders.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## ⭐ Support this Project
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+If this checkout service helps power your marketplace order flow, consider giving the repository a star on GitHub.
 
-## Support
+---
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+<div align="center">
 
-## Stay in touch
+Made with ♥ by **[João Otávio Schonarth](https://github.com/joschonarth)**
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/joschonarth)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/joschonarth)
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:joschonarth@gmail.com)
 
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+</div>

@@ -1,98 +1,198 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<div align="center">
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# 💳 Payments Service
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+_A NestJS payment processing and event-driven payment result service, backed by PostgreSQL, RabbitMQ, and TypeORM._
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+📃 [About](#-about)&nbsp;&nbsp;•&nbsp;&nbsp;
+🏗️ [Role in the Architecture](#️-role-in-the-architecture)&nbsp;&nbsp;•&nbsp;&nbsp;
+🧠 [Architecture Concepts](#-architecture-concepts)&nbsp;&nbsp;•&nbsp;&nbsp;
+🛠️ [Technologies](#️-technologies)&nbsp;&nbsp;•&nbsp;&nbsp;
+💾 [Database Diagram](#-database-diagram)&nbsp;&nbsp;•&nbsp;&nbsp;
+🚀 [Getting Started](#-getting-started)&nbsp;&nbsp;•&nbsp;&nbsp;
+📖 [API Documentation](#-api-documentation)&nbsp;&nbsp;•&nbsp;&nbsp;
+🧪 [Testing](#-testing)
 
-## Project setup
+</div>
 
-```bash
-$ npm install
+---
+
+## 📃 About
+
+The payments service implements the marketplace payment processing boundary. It consumes payment requests from the checkout domain, simulates a payment gateway through a fake gateway adapter, records payment outcomes in a relational database, and publishes the final result back into the event exchange for the checkout service.
+
+This service is responsible for storing payment records, validating payment-message structure, orchestrating the payment execution, and exposing the payment record by order ID through a lightweight REST endpoint.
+
+## 🏗️ Role in the Architecture
+
+The payments service is a downstream asynchronous event consumer that participates in the enterprise payment flow. It receives payment-order messages from the checkout service by listening to the `payments` exchange and `payment.order` routing key on the `payment_queue` queue. After a payment record is stored and processed, it publishes a `payment.result` event to the same exchange and uses the result to update the checkout order state.
+
+The service exposes the following HTTP surface:
+
+- `GET /payments/:orderId` — retrieves a persisted `Payment` record by order ID.
+
+It also offers internal operational endpoints under `events/dlq` for inspecting, reprocessing, discarding, or purging failed payment messages from the controlled dead-letter structure.
+
+## 🧠 Architecture Concepts
+
+The service implements several event and resilience patterns in a way that is verifiable from the code:
+
+- **Event-Driven Architecture** — the service consumes `PaymentOrderMessage` objects from RabbitMQ and publishes `PaymentResultMessage` events back to `payments` exchange.
+- **Publish/Subscribe and Message Queue** — the queue `payment_queue` is bound to the `payments` exchange with the routing key `payment.order`, and results are published on `payment.result`.
+- **Dead Letter Queue (DLQ)** — RabbitMQ configuration in `rabbitmq.service.ts` creates retry and DLQ exchanges and queues, including `payment_queue.dlq`, `payment_queue.retry`, and policy-backed retry/dead-letter routing behavior.
+- **Retry** — the subscription code records retry attempts and uses `x-dead-letter-exchange`/`x-dead-letter-routing-key` to move failed messages through the retry exchange before they reach the DLQ.
+- **Database per Service** — the service owns the `Payment` entity in PostgreSQL and persists payment state on its own database.
+- **Health Checks** — the `HealthController` checks database reachability and the RabbitMQ connection through a custom health indicator.
+- **Observability** — the service has a metrics registry and custom metrics classes for payment processing, average latency, retries, and failure summaries.
+
+## 🛠️ Technologies
+
+- ⚙️ **[NestJS](https://nestjs.com/)** — framework for controllers, services, event workers, and module composition.
+- 🟦 **[TypeScript](https://www.typescriptlang.org/)** — primary implementation language.
+- 🌐 **[Express](https://expressjs.com/)** — HTTP server platform used by the NestJS runtime.
+- 📡 **[@nestjs/axios](https://docs.nestjs.com/techniques/http-module)** — HTTP support available in the dependency set.
+- 🔐 **[@nestjs/jwt](https://github.com/nestjs/jwt)** — JWT support declared in the dependency file.
+- 🛡️ **[@nestjs/passport](https://github.com/nestjs/passport)** — Passport integration used by the service dependency stack.
+- 🩺 **[@nestjs/terminus](https://docs.nestjs.com/recipes/terminus)** — health-check support for database and RabbitMQ.
+- 🗄️ **[@nestjs/typeorm](https://docs.nestjs.com/techniques/database)** — TypeORM configuration and repository integration.
+- 🐘 **[PostgreSQL](https://www.postgresql.org/)** — primary relational datastore for payments.
+- 🐇 **[RabbitMQ](https://www.rabbitmq.com/)** — message broker supporting payment-order consumption and payment-result publication.
+- 🧾 **[TypeORM](https://typeorm.io/)** — ORM used to map the `Payment` entity.
+- 🧪 **[Jest](https://jestjs.io/)** — automated test framework for unit and e2e suites.
+- 📊 **[prom-client](https://github.com/siimon/prom-client)** — metrics collection library used by this service’s HTTP metrics and custom service metrics.
+- 🐰 **[amqplib](https://www.npmjs.com/package/amqplib)** — client library for RabbitMQ publish and subscribe operations.
+- 📡 **[axios](https://axios-http.com/)** — HTTP library declared in the dependency set.
+- 🔑 **[bcryptjs](https://www.npmjs.com/package/bcryptjs)** — password-utility package found in the dependency list, although the payment service does not define authentication logic in this service file map.
+
+## 💾 Database Diagram
+
+```mermaid
+erDiagram
+  PAYMENT {
+    uuid id PK
+    uuid orderId UK
+    uuid userId
+    decimal amount
+    enum status
+    varchar paymentMethod
+    varchar transactionId
+    varchar rejectionReason
+    timestamp processedAt
+    timestamp createdAt
+    timestamp updatedAt
+  }
 ```
 
-## Compile and run the project
+The `Payment` entity stores a one-to-one record per payment request keyed by `orderId`. The entity also preserves the transaction identifier, rejection reason, and processing timestamp after the fake gateway returns a result.
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 22+ recommended
+- [npm](https://www.npmjs.com/) or [pnpm](https://pnpm.io/)
+- PostgreSQL and RabbitMQ reachable through the environment values in the service
+
+### Installation
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/joschonarth/marketplace-ms.git
+   ```
+
+2. Enter the service directory:
+
+   ```bash
+   cd marketplace-ms/payments-service
+   ```
+
+3. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+### Environment Variables
+
+The service has a `.env.example` file with the values needed for the PostgreSQL database, JWT secret, upstream service URLs, RabbitMQ connectivity, and payment gateway credentials:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env
 ```
 
-## Run tests
+The example file declares:
+
+```env
+PORT=3004
+NODE_ENV=development
+DB_HOST=localhost
+DB_PORT=5435
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_DATABASE=payments_db
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=24h
+USERS_SERVICE_URL=http://localhost:3000
+PRODUCTS_SERVICE_URL=http://localhost:3001
+CHECKOUT_SERVICE_URL=http://localhost:3003
+RABBITMQ_URL=amqp://admin:admin@localhost:5672
+RABBITMQ_QUEUE_PAYMENTS=payment_queue
+RABBITMQ_EXCHANGE=payments
+PAYMENT_GATEWAY_URL=
+PAYMENT_GATEWAY_API_KEY=
+```
+
+### Database and Messaging
+
+The service creates a `TypeOrmModule` connection using the configured `database.config.ts`, and the RabbitMQ exchange and queue wiring are handled by the `EventsModule` and the `RabbitmqService`.
+
+### Run the service
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run start:dev
 ```
 
-## Deployment
+The default port is `3004` if `PORT` is not set in the process environment.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## 📖 API Documentation
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+The payments service does not currently register a Swagger document in the bootstrap file, and its `main.ts` file contains only the Nest application creation, CORS enablement, and global validation pipe. Because the service is not configured with `@nestjs/swagger`, the endpoint reference is REST-only and the docs remain the route via `GET /payments/:orderId` in the controller.
+
+After the service is started locally, the service is reachable through the gateway’s payment proxy endpoint and the direct service endpoint:
+
+```text
+http://localhost:3004/payments/:orderId
+```
+
+The gateway forwards GET requests for payment status by order ID, and the service stores the payment result in the relational database for later lookup.
+
+## 🧪 Testing
+
+The service has automated Jest test files for the fake gateway and payment service, as well as a service e2e suite. The command to run tests is:
 
 ```bash
-$ npm install -g mau
-$ mau deploy
+npm test
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+The test scaffolding confirms that the code is designed for unit- and e2e-style verification around `Payment`, `PaymentsService`, and the fake payment gateway.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## ⭐ Support this Project
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+If this payment service helps your marketplace process transactions reliably, consider giving the repository a star on GitHub.
 
-## Support
+---
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+<div align="center">
 
-## Stay in touch
+Made with ♥ by **[João Otávio Schonarth](https://github.com/joschonarth)**
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/joschonarth)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/joschonarth)
+[![Gmail](https://img.shields.io/badge/Gmail-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:joschonarth@gmail.com)
 
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+</div>

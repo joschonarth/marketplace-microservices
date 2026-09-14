@@ -30,24 +30,52 @@ Instead of a single process handling all concerns, the codebase separates respon
 
 ## 🏗️ Architecture
 
+The repository follows a layered deployment model in which the API gateway receives client traffic, service modules own their business responsibilities, RabbitMQ carries asynchronous payment events, and Prometheus and Grafana provide the observability and metrics layer.
+
 ```mermaid
-flowchart LR
-    Client[Client] --> Gateway[API Gateway]
-    Gateway --> Users[users-service]
-    Gateway --> Products[products-service]
-    Gateway --> Checkout[checkout-service]
-    Gateway --> Payments[payments-service]
+flowchart TB
+    subgraph ClientBoundary[Client / External Access]
+        Client[Client]
+    end
 
-    Checkout -->|payment.order| RabbitMQ[RabbitMQ]
-    RabbitMQ -->|payment.order| Payments
-    Payments -->|payment.result| RabbitMQ
-    RabbitMQ -->|result flow| Checkout
+    subgraph GatewayBoundary[Gateway Boundary]
+        Gateway[api-gateway\nProxyService + route controllers]
+    end
 
-    Observability[observability-stack\nPrometheus + Grafana] -->|scrape metrics| Gateway
-    Observability -->|scrape metrics| Users
-    Observability -->|scrape metrics| Products
-    Observability -->|scrape metrics| Checkout
-    Observability -->|scrape metrics| Payments
+    subgraph DomainServices[Business Services]
+        Users[users-service]
+        Products[products-service]
+        Checkout[checkout-service]
+        Payments[payments-service]
+    end
+
+    subgraph IntegrationBoundary[Async Event Boundary]
+        Broker[RabbitMQ\nMessaging Service]
+    end
+
+    subgraph ObservabilityBoundary[Observability Boundary]
+        Prometheus[Prometheus]
+        Grafana[Grafana]
+    end
+
+    Client --> Gateway
+    Gateway --> Users
+    Gateway --> Products
+    Gateway --> Checkout
+    Gateway --> Payments
+
+    Checkout -->|payment.order| Broker
+    Broker -->|payment.order| Payments
+    Payments -->|payment.result| Broker
+    Broker -->|result propagation| Checkout
+
+    Gateway -. metrics .-> Prometheus
+    Users -. metrics .-> Prometheus
+    Products -. metrics .-> Prometheus
+    Checkout -. metrics .-> Prometheus
+    Payments -. metrics .-> Prometheus
+
+    Prometheus --> Grafana
 ```
 
 ## 🛠️ Microservices
@@ -65,6 +93,7 @@ flowchart LR
 ## 🧠 Key Concepts & Patterns
 
 - **API Gateway Pattern** — the repository exposes a single API entry point in the gateway service that routes incoming traffic to the correct internal service.
+- **Proxy Pattern** — the gateway implements a reusable `ProxyService` component that forwards requests to the downstream services while applying fallback, retry, timeout, and circuit-breaker policies.
 - **Database per Service** — the services keep ownership boundaries around their own databases in their code and configuration patterns.
 - **Event-Driven Architecture** — the checkout and payments services exchange payment-related events through RabbitMQ instead of synchronous direct calls.
 - **Messaging Patterns** — the repository uses publish/subscribe and point-to-point queue patterns across the payment and event transaction flow.
